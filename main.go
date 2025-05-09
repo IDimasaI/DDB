@@ -2,11 +2,11 @@ package main
 
 import (
 	"My-Redis/config"
+	"My-Redis/internal/adapter"
 	"My-Redis/internal/router"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,15 +25,21 @@ func main() {
 		port := flag.Int("port", 8188, "Port to scan")
 		flag.Parse()
 
-		Config.Port = *port
-		config.UpdateMainConfigInstance(Config)
-
 		path, _ = os.Getwd()
 		path = filepath.Join(path)
+
+		Config.Port = *port
+		Config.PathEXE = path
+
+		config.UpdateMainConfigInstance(Config)
 	} else {
 		fmt.Println("Режим продакшн...")
 		path, _ = os.Executable()
 		path = filepath.Join(filepath.Dir(path))
+
+		Config.PathEXE = path
+
+		config.UpdateMainConfigInstance(Config)
 	}
 
 	mux := router.NewMyRouter()
@@ -48,8 +54,8 @@ func main() {
 	fmt.Println("Listening on http://localhost:" + strconv.Itoa(Config.Port))
 	server := &http.Server{
 		Addr:           ":" + strconv.Itoa(Config.Port),
-		Handler:        Middleware(mux, router.MiddlewareOpt{MaxBytes: Config.MaxTransBytes})(mux), // 3
-		MaxHeaderBytes: 1 << 20,                                                                    //128кб
+		Handler:        Middleware(mux, router.MiddlewareOpt{MaxBytes: Config.MaxTransBytes})(mux),
+		MaxHeaderBytes: 1 << 20, //128кб
 
 	}
 
@@ -67,12 +73,16 @@ func httpRouterConfig(path *string, mux *router.MyRouter) {
 			filePath := filepath.Join(*path, "ui", "pages", "config.html")
 			html, _ := os.ReadFile(filePath)
 
+			config := config.GetMainConfig()
+
 			pageData := struct {
 				IsDev         bool
 				MaxTransBytes int64
+				StorageType   string
 			}{
-				IsDev:         config.GetMainConfig().IsDev,
-				MaxTransBytes: config.GetMainConfig().MaxTransBytes,
+				IsDev:         config.IsDev,
+				MaxTransBytes: config.MaxTransBytes,
+				StorageType:   config.StorageType,
 			}
 
 			jsonData, err := json.Marshal(pageData)
@@ -114,14 +124,14 @@ func Middleware(next http.Handler, options router.MiddlewareOpt) func(http.Handl
 }
 
 func httpRouterAdapter(path string, mux *router.MyRouter) {
+	ad := adapter.New()
 	mux.AddRouter("/set", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		body, _ := io.ReadAll(r.Body)
-		bodys := string(body)
-		w.Write([]byte("{\"status\":\"ok\",\"data\":" + bodys + "}"))
+		ad.Handle(w, r, adapter.SET)
+		return
 	})
 
 	mux.AddRouter("/get", func(w http.ResponseWriter, r *http.Request) {
-
+		ad.Handle(w, r, adapter.GET)
+		return
 	})
 }

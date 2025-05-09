@@ -13,6 +13,8 @@ type Config struct {
 	IsDev         bool
 	Port          int
 	MaxTransBytes int64
+	PathEXE       string
+	StorageType   string
 }
 
 var (
@@ -56,6 +58,8 @@ func (c *Config) load(path string) error {
 	c.setPort(json.Port)
 	c.IsDev = json.IsDev
 	c.MaxTransBytes = json.MaxTransBytes
+	c.PathEXE = json.PathEXE
+	c.setStorageType(json.StorageType)
 	return nil
 }
 
@@ -86,5 +90,15 @@ func (c *Config) setPort(port int) error {
 		return fmt.Errorf("порт %d невалиден (должен быть 1-65535)", port)
 	}
 	c.Port = port
+	return nil
+}
+
+func (c *Config) setStorageType(storageType string) error {
+	if storageType == "" {
+		c.StorageType = "base"
+		return nil
+	} else {
+		c.StorageType = storageType
+	}
 	return nil
 }

@@ -47,11 +47,11 @@ func (r *MyRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func CheckBodySize(w http.ResponseWriter, r *http.Request, maxBytes int64) bool {
 	// 1. Проверяем Content-Length (если он указан)
-	//if r.ContentLength > maxBytes {
-	//	http.Error(w, "Request too large", http.StatusBadRequest)
-	//	return false
-	//}
-	r.ContentLength = 0
+	if r.ContentLength > maxBytes {
+		http.Error(w, "Request too large", http.StatusBadRequest)
+		return false
+	}
+
 	// 2. Если Content-Length не указан (или 0), проверяем тело вручную
 	if r.ContentLength <= 0 {
 		// Сохраняем оригинальное тело, чтобы потом восстановить
