@@ -14,6 +14,7 @@ const (
 	GET Action = iota // начинаем с 0 и инкрементируем
 	DELETE
 	SET
+	IsExist
 	// можно добавить другие действия
 )
 
@@ -45,6 +46,9 @@ func (a *Adapter) Handle(w http.ResponseWriter, r *http.Request, action Action) 
 	switch action {
 	case GET:
 		a.Storage.GET(w, r)
+		return
+	case IsExist:
+		a.Storage.IsExist(w, r)
 		return
 	default:
 		a.Storage.SET(w, r)

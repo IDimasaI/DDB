@@ -2,7 +2,18 @@ import * as DMjs from './DMjs.js';
 
 
 async function GetData() {
-    const res = await fetch('/get', { method: 'GET' });
+    const input = document.getElementById("input").value
+    const input2 = document.getElementById("input2").value
+
+    const send = JSON.stringify({
+        NameBD: "docs",
+        NameTable: "go",
+        Data: {
+            [input]: {}
+        }
+    })
+
+    const res = await fetch(`/get`, { method: 'POST', body: send });
     const data = await res.json();
     console.log(data);
 }
@@ -19,7 +30,8 @@ async function SentData() {
                 [input]: {
                     test: input2,
                     input: "test",
-                    inDB: ["car", "dog"]
+                    inDB: ["car", "dog"],
+                    as:[{"name":"lambargini"},{"name":"Dog"}]
                 }
             }
         })
@@ -38,7 +50,35 @@ async function SentData() {
     }
 }
 
+async function IsExistData() {
+    const input = document.getElementById("input").value
+    const input2 = document.getElementById("input2").value
 
+    const send = JSON.stringify({
+        NameBD: "docs",
+        NameTable: "go",
+        Data: {
+            [input]: {
+                test: input2,
+                input: "test",
+                inDB: ["car", "dog"]
+            }
+        }
+    })
+
+    const res = await fetch('/IsExist', {
+        method: 'POST',
+        body: send,
+        headers: { 'Content-Length': '0' }
+    });
+    let data = await res.json();
+    data = {
+        ...data.data,
+        row: data.data.row
+    }
+    console.log(data)
+    console.log(data)
+}
 
 
 const section = document.createElement('section');
@@ -51,6 +91,11 @@ button1.addEventListener('click', GetData);
 const button2 = document.createElement('button');
 button2.textContent = 'Отправить Post запрос';
 button2.addEventListener('click', SentData);
+
+const button3 = document.createElement('button');
+button3.textContent = 'Отправить IsExist запрос';
+button3.addEventListener('click', IsExistData);
+
 
 const input = document.createElement('input');
 input.id = 'input';
@@ -66,6 +111,8 @@ section.append(
     button1,
     document.createElement('br'),
     button2,
+    document.createElement('br'),
+    button3,
     document.createElement('br'),
     input,
     document.createElement('br'),

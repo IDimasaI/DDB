@@ -134,4 +134,9 @@ func httpRouterAdapter(path string, mux *router.MyRouter) {
 		ad.Handle(w, r, adapter.GET)
 		return
 	})
+
+	mux.AddRouter("/IsExist", func(w http.ResponseWriter, r *http.Request) {
+		ad.Handle(w, r, adapter.IsExist)
+		return
+	})
 }
