@@ -18,8 +18,25 @@ async function GetData() {
     console.log(data);
 }
 
+async function deleteData() {
+    const input = document.getElementById("input").value
+    const input2 = document.getElementById("input2").value
+
+    const send = JSON.stringify({
+        NameBD: "docs",
+        NameTable: "go",
+        Data: {
+            [input]: {input: "test"}
+        }
+    })
+
+    const res = await fetch(`/delete`, { method: 'POST', body: send });
+    const data = await res.json();
+    console.log(data);
+}
+
 async function SentData() {
-    for (let i = 0; i < 1; i++) {
+    for (let i = 0; i < 13; i++) {
         const input = document.getElementById("input").value
         const input2 = document.getElementById("input2").value
 
@@ -27,11 +44,11 @@ async function SentData() {
             NameBD: "docs",
             NameTable: "go",
             Data: {
-                [input]: {
+                [input+i]: {
                     test: input2,
                     input: "test",
                     inDB: ["car", "dog"],
-                    as:[{"name":"lambargini"},{"name":"Dog"}]
+                    as: [{ "name": "lambargini" }, { "name": "Dog" }]
                 }
             }
         })
@@ -41,11 +58,8 @@ async function SentData() {
             body: send,
             headers: { 'Content-Length': '0' }
         });
-        let data = await res.json();
-        data = {
-            ...data.data,
-            row: data.data.row
-        }
+        let data = await res.text();
+        
         console.log(data)
     }
 }
@@ -58,11 +72,7 @@ async function IsExistData() {
         NameBD: "docs",
         NameTable: "go",
         Data: {
-            [input]: {
-                test: input2,
-                input: "test",
-                inDB: ["car", "dog"]
-            }
+            [input]: { input: "test" }
         }
     })
 
@@ -96,6 +106,11 @@ const button3 = document.createElement('button');
 button3.textContent = 'Отправить IsExist запрос';
 button3.addEventListener('click', IsExistData);
 
+const button4 = document.createElement('button');
+button4.textContent = 'Отправить delete запрос';
+button4.addEventListener('click', deleteData);
+
+
 
 const input = document.createElement('input');
 input.id = 'input';
@@ -113,6 +128,8 @@ section.append(
     button2,
     document.createElement('br'),
     button3,
+    document.createElement('br'),
+    button4,
     document.createElement('br'),
     input,
     document.createElement('br'),

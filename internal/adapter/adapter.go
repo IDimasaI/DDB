@@ -47,6 +47,8 @@ func (a *Adapter) Handle(w http.ResponseWriter, r *http.Request, action Action) 
 	case GET:
 		a.Storage.GET(w, r)
 		return
+	case DELETE:
+		a.Storage.DELETE(w, r)
 	case IsExist:
 		a.Storage.IsExist(w, r)
 		return

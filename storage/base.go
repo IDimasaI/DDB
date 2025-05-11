@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -26,15 +28,17 @@ type RequestData struct {
 // [каталог][файл][таблицы]
 // максимум (int16)32767
 type memoryTablesType struct {
-	storage   map[string]map[string]interface{}
-	maxTables int16
-	mu        sync.RWMutex
+	storage     map[string]map[string]any
+	currentSize int16
+	maxTables   int16
+	mu          sync.RWMutex
 }
 
 func NewMemoryTablesType(maxTables int16) memoryTablesType {
 	return memoryTablesType{
-		storage:   make(map[string]map[string]interface{}, 1),
-		maxTables: maxTables,
+		storage:     make(map[string]map[string]any, 1),
+		currentSize: 0,
+		maxTables:   maxTables,
 	}
 }
 
@@ -114,13 +118,44 @@ func NewBaseStorage(cfg config.Config) *BaseStorage {
 //	return nil
 //}
 
-func (*BaseStorage) DELETE(w http.ResponseWriter, r *http.Request) {}
+func (a *BaseStorage) DELETE(w http.ResponseWriter, r *http.Request) {
+	// 1. Проверяем существование данных
+	var data RequestData
+	processBodyToData(w, r, &data)
+	if !a.memoryRowIsExist(false, &data) {
+		http.Error(w, "Data not found", http.StatusNotFound)
+		return
+	}
+
+	// 2. Получаем ключ для удаления
+	key, err := getKey(data.Data)
+	if err != nil {
+		http.Error(w, "Invalid data key", http.StatusBadRequest)
+		return
+	}
+
+	// 3. Проверяем существование таблицы и удаляем запись
+	if data.NameBD != nil && data.NameTable != nil {
+		table := a.memoryTables.storage[*data.NameBD][*data.NameTable].(map[string]map[string]any)
+		if table != nil {
+			delete(table, key)
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "Record with key '%s' deleted successfully", key)
+			return
+		}
+	}
+
+	http.Error(w, "Table not found", http.StatusNotFound)
+}
 func (a *BaseStorage) GET(w http.ResponseWriter, r *http.Request) {
-	ok, data := a.rowIsExist(w, r, true)
-	if !ok {
+	var data RequestData
+	processBodyToData(w, r, &data)
+
+	if !a.memoryRowIsExist(true, &data) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	} else {
+		fmt.Println(data)
 		json.NewEncoder(w).Encode(data)
 		return
 	}
@@ -134,18 +169,33 @@ func (a *BaseStorage) SET(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"status":"error","message":"Missing required fields"}`, http.StatusBadRequest)
 		return
 	}
-	_ = a.addInMemory(*data.NameBD, *data.NameTable, data.Data)
+
+	err := a.addInMemory(*data.NameBD, *data.NameTable, data.Data)
+
+	if a.memoryTables.currentSize > a.memoryTables.maxTables {
+		a.addInFiles(*data.NameBD, *data.NameTable, data.Data, true)
+		return
+	}
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 }
 
 func (a *BaseStorage) IsExist(w http.ResponseWriter, r *http.Request) {
-	ok, _ := a.rowIsExist(w, r, false)
-	if !ok {
+	var data RequestData
+	processBodyToData(w, r, &data)
+
+	if !a.memoryRowIsExist(false, &data) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	return
 }
+
 func processBodyToData(w http.ResponseWriter, r *http.Request, data *RequestData) bool {
 	if err := json.NewDecoder(r.Body).Decode(data); err != nil {
 		http.Error(w, `{"status":"error","message":"Invalid JSON"}`, http.StatusBadRequest)
@@ -174,20 +224,17 @@ func (a *BaseStorage) addInMemory(dbName, tableName string, row map[string]any) 
 	tableData := db[tableName].(map[string]map[string]any)
 
 	// Получаем ключ (более безопасный способ)
-	if len(row) != 1 {
-		return fmt.Errorf("row must contain exactly one key-value pair")
-	}
-
-	var key string
-	for k := range row {
-		key = k
-		break
+	key, err := getKey(row)
+	if err != nil {
+		return err
 	}
 
 	// Определяем операцию (добавление или изменение)
 	operation := "added"
 	if _, exists := tableData[key]; exists {
 		operation = "updated"
+	} else {
+		a.memoryTables.currentSize = a.memoryTables.currentSize + 1
 	}
 
 	// Проверяем и приводим тип значения
@@ -198,61 +245,88 @@ func (a *BaseStorage) addInMemory(dbName, tableName string, row map[string]any) 
 
 	// Записываем данные
 	tableData[key] = value
-	print(operation + "\n")
+	print(operation, "\n")
 	return nil
 }
 
-func (a *BaseStorage) rowIsExist(w http.ResponseWriter, r *http.Request, get bool) (bool, any) {
-	var data RequestData
-	if !processBodyToData(w, r, &data) {
-		fmt.Println("Ошибка: не удалось распарсить JSON")
-		return false, nil
+func (a *BaseStorage) addInFiles(dbName, tableName string, row map[string]any, allMemory bool) error {
+	basePath := filepath.Join(a.config.PathEXE, ".redis", dbName)
+	if err := os.MkdirAll(basePath, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if len(data.Data) != 1 {
-		return false, nil
+	tablePath := filepath.Join(basePath, tableName+".db")
+	file, err := os.OpenFile(tablePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
 	}
+	defer file.Close()
+
+	return nil
+}
+
+// вызов фукнции для рекусивного использования addInFiles
+func (a *BaseStorage) fullAddInMemoryToFiles() {
+
+}
+
+func createMetaInfoFile() {
+
+}
+
+func (a *BaseStorage) memoryRowIsExist(get bool, data *RequestData) bool {
 
 	if data.NameBD == nil || data.NameTable == nil {
 		fmt.Println("Ошибка: не указано имя БД или таблицы")
-		return false, nil
+		return false
 	}
 
 	// 1. Проверяем существование БД
 	db, dbExists := a.memoryTables.storage[*data.NameBD]
 	if !dbExists {
 		fmt.Printf("БД '%s' не найдена\n", *data.NameBD)
-		return false, nil
+		return false
 	}
 
 	// 2. Проверяем существование таблицы
 	table, tableExists := db[*data.NameTable]
 	if !tableExists {
 		fmt.Printf("Таблица '%s' не найдена в БД '%s'\n", *data.NameTable, *data.NameBD)
-		return false, nil
+		return false
 	}
 
 	// 3. Приводим к map[string]any (если ожидается именно такой тип)
 	tableData, ok := table.(map[string]map[string]any)
 	if !ok {
 		fmt.Printf("Таблица '%s' не является map[string]any\n", *data.NameTable)
-		return false, nil
+		return false
 	}
 
-	var key string
-	for k := range data.Data {
-		key = k
-		break
+	key, err := getKey(data.Data)
+	if err != nil {
+		return false
 	}
 
 	// 4. Проверяем существует ли ключ
-	if tableData[key] != nil {
+	if val, exists := tableData[key]; exists {
 		if get {
-			return true, tableData[key]
-		} else {
-			return true, nil
+			data.Data = val
 		}
+		return true
 	}
 
-	return false, nil
+	return false
+}
+
+func getKey(data map[string]any) (key string, err error) {
+	if len(data) != 1 {
+		return "", fmt.Errorf("data содержет не [ключ]:Значение")
+	} else {
+		var key string
+		for k := range data {
+			key = k
+			break
+		}
+		return key, nil
+	}
 }
