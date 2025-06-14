@@ -1,0 +1,15 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build Go Project",
+        "type": "shell",
+        "command": "go build -o build/server.exe main.go",
+        "group": "build",
+        "problemMatcher": [],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        }
+      }
+    ]
+  }
