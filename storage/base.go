@@ -2,8 +2,11 @@ package storage
 
 import (
 	"My-Redis/config"
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -118,6 +121,11 @@ func NewBaseStorage(cfg config.Config) *BaseStorage {
 //	return nil
 //}
 
+const (
+	SizeMetaPage = 4 * 1024 // 4 КБ на метаданные
+	SizePages    = 8 * 1024 // 8 КБ на таблицу
+)
+
 func (a *BaseStorage) DELETE(w http.ResponseWriter, r *http.Request) {
 	// 1. Проверяем существование данных
 	var data RequestData
@@ -173,7 +181,12 @@ func (a *BaseStorage) SET(w http.ResponseWriter, r *http.Request) {
 	err := a.addInMemory(*data.NameBD, *data.NameTable, data.Data)
 
 	if a.memoryTables.currentSize > a.memoryTables.maxTables {
-		a.addInFiles(*data.NameBD, *data.NameTable, data.Data, true)
+		err = a.addInFiles(*data.NameBD, *data.NameTable, data.Data, true)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
 		return
 	}
 
@@ -203,6 +216,13 @@ func processBodyToData(w http.ResponseWriter, r *http.Request, data *RequestData
 	}
 	defer r.Body.Close()
 	return true
+}
+
+type metaData struct {
+	Keys    map[string]int64 `json:"keys"`    // Список ключей и строк
+	Pages   int32            `json:"pages"`   // Количество строк
+	Version int              `json:"version"` // Версия
+	Voids   []int32          `json:"voids"`
 }
 
 func (a *BaseStorage) addInMemory(dbName, tableName string, row map[string]any) error {
@@ -251,16 +271,57 @@ func (a *BaseStorage) addInMemory(dbName, tableName string, row map[string]any) 
 
 func (a *BaseStorage) addInFiles(dbName, tableName string, row map[string]any, allMemory bool) error {
 	basePath := filepath.Join(a.config.PathEXE, ".redis", dbName)
+
+	if allMemory {
+		//TDD
+	}
+
 	if err := os.MkdirAll(basePath, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	tablePath := filepath.Join(basePath, tableName+".db")
-	file, err := os.OpenFile(tablePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+
+	// Проверяем, существует ли файл и создаем его с метаданными, если нет
+	if _, err := os.Stat(tablePath); os.IsNotExist(err) {
+		if err := createNewTableFile(tablePath); err != nil {
+			return err
+		}
+	}
+
+	rowKey, err := getKey(row)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+		return err
+	}
+
+	file, err := os.OpenFile(tablePath, os.O_RDWR, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open file for reading: %w", err)
 	}
 	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	meta, err := scanMetaInfoFile(scanner, file)
+	if err != nil {
+		return err
+	}
+
+	if meta.Keys == nil || meta.Keys[rowKey] == 0 {
+		rowNum, err := writeNewKey(scanner, row, file, &meta)
+		if err != nil {
+			return err
+		}
+		meta.Keys[rowKey] = rowNum
+	}
+
+	fmt.Println(meta)
+	// Записываем метаданные
+	updatedMetaData(file, meta)
+
+	if err = scanner.Err(); err != nil {
+		return fmt.Errorf("error while scanning file: %w", err)
+	}
 
 	return nil
 }
@@ -270,8 +331,72 @@ func (a *BaseStorage) fullAddInMemoryToFiles() {
 
 }
 
-func createMetaInfoFile() {
+// заполнитель на n байт
+func fillBuffer(size int) []byte {
+	return make([]byte, size)
+}
 
+func createNewTableFile(tablePath string) error {
+	file, err := os.Create(tablePath)
+	if err != nil {
+		return fmt.Errorf("failed to create table file: %w", err)
+	}
+	defer file.Close()
+
+	// Записываем метаданные и делаем заполнитель на 4кб
+	meta, _ := json.Marshal(metaData{Pages: 0, Keys: map[string]int64{}, Version: 1, Voids: []int32{}})
+	metalen := len(meta) + len("\n")
+	if _, err := file.WriteString(
+		string(meta) + string(fillBuffer(SizeMetaPage-metalen)) + "\n",
+	); err != nil {
+		return fmt.Errorf("failed to write metadata: %w", err)
+	}
+
+	return nil
+}
+
+func scanMetaInfoFile(scanner *bufio.Scanner, file *os.File) (metaData, error) {
+	_, _ = file.Seek(0, io.SeekStart)
+	var meta metaData
+	if scanner.Scan() {
+		line := scanner.Bytes()
+		line = bytes.TrimRight(line, "\x00")
+		json.Unmarshal(line, &meta)
+		return meta, nil
+	}
+	return metaData{}, scanner.Err()
+}
+
+func updatedMetaData(file *os.File, metaData metaData) error {
+	filepos, _ := file.Seek(0, io.SeekCurrent)
+
+	_, _ = file.Seek(0, SizeMetaPage)
+
+	metaNew, err := json.Marshal(metaData)
+	if err != nil {
+		return err
+	}
+	metaNew = append(metaNew, fillBuffer(SizeMetaPage-len(metaNew))...)
+	_, err = file.WriteAt(metaNew, 0)
+	if err != nil {
+		return err
+	}
+	_, err = file.Seek(filepos, io.SeekStart)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeNewKey(scanner *bufio.Scanner, row map[string]any, file *os.File, metaData *metaData) (rowNum int64, error error) {
+	if metaData.Voids == nil {
+	}
+	rowNum, _ = file.Seek(0, io.SeekEnd)
+	data := fmt.Sprintf("%v\n", row)
+	if _, err := file.WriteString(data); err != nil {
+		return 0, err
+	}
+	return rowNum, nil
 }
 
 func (a *BaseStorage) memoryRowIsExist(get bool, data *RequestData) bool {

@@ -36,8 +36,15 @@ async function deleteData() {
 }
 
 async function SentData() {
-    for (let i = 0; i < 13; i++) {
-        const input = document.getElementById("input").value
+    const input = document.getElementById("input").value
+    let count
+    if (input== "test"){
+        count=10
+    }else{
+        count=1
+    }
+    for (let i = 0; i < count; i++) {
+        
         const input2 = document.getElementById("input2").value
 
         const send = JSON.stringify({
