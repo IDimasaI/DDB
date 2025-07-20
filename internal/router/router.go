@@ -100,3 +100,22 @@ func CheckBodySize(w http.ResponseWriter, r *http.Request, maxBytes int64) bool 
 
 	return true
 }
+
+func Middleware(next http.Handler, options MiddlewareOpt) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Проверяем только POST/PUT/PATCH
+			if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
+				r.Body = http.MaxBytesReader(w, r.Body, options.MaxBytes)
+				r.ContentLength = 0
+				// Если Content-Length превышает лимит — сразу отказываем
+				if r.ContentLength > options.MaxBytes {
+					http.Error(w, "Payload too large (max 1MB)", http.StatusRequestEntityTooLarge)
+					return
+				}
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}

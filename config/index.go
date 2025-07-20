@@ -27,7 +27,7 @@ func GetMainConfig() Config {
 	once.Do(func() {
 		instance = &Config{}
 		instance.IsDev = isDev()
-
+		fmt.Println("isDev", instance.IsDev)
 		var configPath string
 		if instance.IsDev {
 			wd, _ := os.Getwd()
@@ -46,7 +46,8 @@ func GetMainConfig() Config {
 
 func isDev() bool {
 	temp, _ := os.Executable()
-	return strings.Contains(temp, os.TempDir())
+	fmt.Println(temp)
+	return strings.Contains(temp, os.TempDir()) || strings.Contains(temp, "\\Local\\go-build")
 }
 
 func (c *Config) load(path string) error {

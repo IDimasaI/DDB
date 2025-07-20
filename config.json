@@ -1,5 +1,6 @@
 {
     "Port": 8480,
     "IsDev": true,
-    "MaxTransBytes":40960
+    "MaxTransBytes":40960,
+    "StorageType":"sqlite"
 }

@@ -43,6 +43,7 @@ async function SentData() {
     }else{
         count=1
     }
+    const inputKey=count !== 1 ? "test" : input
     for (let i = 0; i < count; i++) {
         
         const input2 = document.getElementById("input2").value
@@ -51,7 +52,7 @@ async function SentData() {
             NameBD: "docs",
             NameTable: "go",
             Data: {
-                [input+i]: {
+                [inputKey=="test" ? input+i: input]: {
                     test: input2,
                     input: "test",
                     inDB: ["car", "dog"],

@@ -46,14 +46,14 @@ func NewMemoryTablesType(maxTables int16) memoryTablesType {
 }
 
 // Определяем структуру хранилища
-type BaseStorage struct {
+type baseStorage struct {
 	config       config.Config
 	memoryTables memoryTablesType
 }
 
 // Инициализация выбранного БД(только 1 раз)
-func NewBaseStorage(cfg config.Config) *BaseStorage {
-	return &BaseStorage{
+func NewBaseStorage(cfg config.Config) *baseStorage {
+	return &baseStorage{
 		config:       cfg,
 		memoryTables: NewMemoryTablesType(10), // Инициализация с рабочей map
 	}
@@ -126,7 +126,7 @@ const (
 	SizePages    = 8 * 1024 // 8 КБ на таблицу
 )
 
-func (a *BaseStorage) DELETE(w http.ResponseWriter, r *http.Request) {
+func (a *baseStorage) DELETE(w http.ResponseWriter, r *http.Request, ctx *BdContext) {
 	// 1. Проверяем существование данных
 	var data RequestData
 	processBodyToData(w, r, &data)
@@ -155,7 +155,7 @@ func (a *BaseStorage) DELETE(w http.ResponseWriter, r *http.Request) {
 
 	http.Error(w, "Table not found", http.StatusNotFound)
 }
-func (a *BaseStorage) GET(w http.ResponseWriter, r *http.Request) {
+func (a *baseStorage) GET(w http.ResponseWriter, r *http.Request, ctx *BdContext) {
 	var data RequestData
 	processBodyToData(w, r, &data)
 
@@ -169,7 +169,7 @@ func (a *BaseStorage) GET(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *BaseStorage) SET(w http.ResponseWriter, r *http.Request) {
+func (a *baseStorage) SET(w http.ResponseWriter, r *http.Request, ctx *BdContext) {
 	var data RequestData
 	_ = processBodyToData(w, r, &data)
 
@@ -197,7 +197,10 @@ func (a *BaseStorage) SET(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (a *BaseStorage) IsExist(w http.ResponseWriter, r *http.Request) {
+// Проверка существования строки в памяти
+// Если найден - возвращаем true и 200
+// Если нет - возвращаем false и 404
+func (a *baseStorage) IsExist(w http.ResponseWriter, r *http.Request, ctx *BdContext) {
 	var data RequestData
 	processBodyToData(w, r, &data)
 
@@ -225,7 +228,7 @@ type metaData struct {
 	Voids   []int32          `json:"voids"`
 }
 
-func (a *BaseStorage) addInMemory(dbName, tableName string, row map[string]any) error {
+func (a *baseStorage) addInMemory(dbName, tableName string, row map[string]any) error {
 	a.memoryTables.mu.Lock()
 	defer a.memoryTables.mu.Unlock()
 
@@ -269,7 +272,7 @@ func (a *BaseStorage) addInMemory(dbName, tableName string, row map[string]any) 
 	return nil
 }
 
-func (a *BaseStorage) addInFiles(dbName, tableName string, row map[string]any, allMemory bool) error {
+func (a *baseStorage) addInFiles(dbName, tableName string, row map[string]any, allMemory bool) error {
 	basePath := filepath.Join(a.config.PathEXE, ".redis", dbName)
 
 	if allMemory {
@@ -327,7 +330,7 @@ func (a *BaseStorage) addInFiles(dbName, tableName string, row map[string]any, a
 }
 
 // вызов фукнции для рекусивного использования addInFiles
-func (a *BaseStorage) fullAddInMemoryToFiles() {
+func (a *baseStorage) fullAddInMemoryToFiles() {
 
 }
 
@@ -399,7 +402,7 @@ func writeNewKey(scanner *bufio.Scanner, row map[string]any, file *os.File, meta
 	return rowNum, nil
 }
 
-func (a *BaseStorage) memoryRowIsExist(get bool, data *RequestData) bool {
+func (a *baseStorage) memoryRowIsExist(get bool, data *RequestData) bool {
 
 	if data.NameBD == nil || data.NameTable == nil {
 		fmt.Println("Ошибка: не указано имя БД или таблицы")

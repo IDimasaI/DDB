@@ -24,13 +24,14 @@ type Adapter struct {
 }
 
 // New создает новый экземпляр адаптера
-func New() *Adapter {
+func Setup() *Adapter {
 	config := config.GetMainConfig()
 	var storageBD storage.StorageActions
 	switch config.StorageType {
 	case "base":
 		storageBD = storage.NewBaseStorage(config)
-	//case "memory": ....
+	case "sqlite":
+		storageBD = storage.NewSQLiteStorage(config)
 	default:
 		return nil
 	}
@@ -41,19 +42,24 @@ func New() *Adapter {
 	}
 }
 
+// InitContext инициализирует контекст
+func (a *Adapter) InitContext() *storage.BdContext {
+	return &storage.BdContext{}
+}
+
 // Handle обрабатывает HTTP запрос в зависимости от действия
-func (a *Adapter) Handle(w http.ResponseWriter, r *http.Request, action Action) {
+func (a *Adapter) Handle(w http.ResponseWriter, r *http.Request, action Action, ctx *storage.BdContext) {
 	switch action {
 	case GET:
-		a.Storage.GET(w, r)
+		a.Storage.GET(w, r, ctx)
 		return
 	case DELETE:
-		a.Storage.DELETE(w, r)
+		a.Storage.DELETE(w, r, ctx)
 	case IsExist:
-		a.Storage.IsExist(w, r)
+		a.Storage.IsExist(w, r, ctx)
 		return
 	default:
-		a.Storage.SET(w, r)
+		a.Storage.SET(w, r, ctx)
 		return
 	}
 }
