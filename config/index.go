@@ -10,11 +10,13 @@ import (
 )
 
 type Config struct {
-	IsDev         bool
-	Port          int
-	MaxTransBytes int64
-	PathEXE       string
-	StorageType   string
+	IsDev           bool
+	Port            int
+	MaxTransBytes   int64
+	PathEXE         string
+	PathStorage     string
+	StorageType     string
+	AutoOpenBrowser bool
 }
 
 var (
@@ -60,7 +62,9 @@ func (c *Config) load(path string) error {
 	c.IsDev = json.IsDev
 	c.MaxTransBytes = json.MaxTransBytes
 	c.PathEXE = json.PathEXE
+	c.setPathStorage(json.PathStorage)
 	c.setStorageType(json.StorageType)
+	c.autoOpenBrowser(json.AutoOpenBrowser)
 	return nil
 }
 
@@ -101,5 +105,19 @@ func (c *Config) setStorageType(storageType string) error {
 	} else {
 		c.StorageType = storageType
 	}
+	return nil
+}
+
+func (c *Config) autoOpenBrowser(autoOpenBrowser bool) bool {
+	c.AutoOpenBrowser = autoOpenBrowser
+	return autoOpenBrowser
+}
+
+func (c *Config) setPathStorage(pathStorage string) error {
+	if pathStorage == "" {
+		c.PathStorage = ".storage"
+		return nil
+	}
+	c.PathStorage = pathStorage
 	return nil
 }

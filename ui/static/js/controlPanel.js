@@ -14,7 +14,7 @@ async function GetData() {
     })
 
     const res = await fetch(`/get`, { method: 'POST', body: send });
-    const data = await res.json();
+    const data = await res.text();
     console.log(data);
 }
 

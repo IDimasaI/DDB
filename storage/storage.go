@@ -1,17 +1,17 @@
 package storage
 
 import (
-	"My-Redis/core"
+	"My-Redis/core/Events"
 	"net/http"
 )
 
-type BdContext struct {
-	Events *core.EventBus
+type AppContext struct {
+	Events *Events.EventBus
 }
 
 type StorageActions interface {
-	GET(w http.ResponseWriter, r *http.Request, ctx *BdContext)
-	SET(w http.ResponseWriter, r *http.Request, ctx *BdContext)
-	DELETE(w http.ResponseWriter, r *http.Request, ctx *BdContext)
-	IsExist(w http.ResponseWriter, r *http.Request, ctx *BdContext)
+	GET(w http.ResponseWriter, r *http.Request, ctx *AppContext)
+	SET(w http.ResponseWriter, r *http.Request, ctx *AppContext)
+	DELETE(w http.ResponseWriter, r *http.Request, ctx *AppContext)
+	IsExist(w http.ResponseWriter, r *http.Request, ctx *AppContext)
 }

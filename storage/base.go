@@ -126,7 +126,7 @@ const (
 	SizePages    = 8 * 1024 // 8 КБ на таблицу
 )
 
-func (a *baseStorage) DELETE(w http.ResponseWriter, r *http.Request, ctx *BdContext) {
+func (a *baseStorage) DELETE(w http.ResponseWriter, r *http.Request, ctx *AppContext) {
 	// 1. Проверяем существование данных
 	var data RequestData
 	processBodyToData(w, r, &data)
@@ -155,7 +155,7 @@ func (a *baseStorage) DELETE(w http.ResponseWriter, r *http.Request, ctx *BdCont
 
 	http.Error(w, "Table not found", http.StatusNotFound)
 }
-func (a *baseStorage) GET(w http.ResponseWriter, r *http.Request, ctx *BdContext) {
+func (a *baseStorage) GET(w http.ResponseWriter, r *http.Request, ctx *AppContext) {
 	var data RequestData
 	processBodyToData(w, r, &data)
 
@@ -169,7 +169,7 @@ func (a *baseStorage) GET(w http.ResponseWriter, r *http.Request, ctx *BdContext
 	}
 }
 
-func (a *baseStorage) SET(w http.ResponseWriter, r *http.Request, ctx *BdContext) {
+func (a *baseStorage) SET(w http.ResponseWriter, r *http.Request, ctx *AppContext) {
 	var data RequestData
 	_ = processBodyToData(w, r, &data)
 
@@ -200,7 +200,7 @@ func (a *baseStorage) SET(w http.ResponseWriter, r *http.Request, ctx *BdContext
 // Проверка существования строки в памяти
 // Если найден - возвращаем true и 200
 // Если нет - возвращаем false и 404
-func (a *baseStorage) IsExist(w http.ResponseWriter, r *http.Request, ctx *BdContext) {
+func (a *baseStorage) IsExist(w http.ResponseWriter, r *http.Request, ctx *AppContext) {
 	var data RequestData
 	processBodyToData(w, r, &data)
 
@@ -209,7 +209,7 @@ func (a *baseStorage) IsExist(w http.ResponseWriter, r *http.Request, ctx *BdCon
 		return
 	}
 
-	return
+	w.WriteHeader(http.StatusOK)
 }
 
 func processBodyToData(w http.ResponseWriter, r *http.Request, data *RequestData) bool {

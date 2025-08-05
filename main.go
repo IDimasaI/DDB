@@ -2,7 +2,7 @@ package main
 
 import (
 	"My-Redis/config"
-	"My-Redis/core"
+	"My-Redis/core/Events"
 	"My-Redis/internal/adapter"
 	"My-Redis/internal/router"
 	"My-Redis/internal/utils"
@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func main() {
@@ -53,31 +52,69 @@ func main() {
 	mux.SetupUI(path)
 
 	//Инициализация роутеров UI
-	httpRouterConfig(&path, mux)
+	{
+		mux.AddRouter("/debug", func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case "POST":
+				config.RefreshAdapterConfig()
+			case "GET":
+
+				filePath := filepath.Join(path, "ui", "pages", "debug.html")
+				html, _ := os.ReadFile(filePath)
+
+				config := config.GetMainConfig()
+
+				pageData := struct {
+					IsDev         bool
+					MaxTransBytes int64
+					StorageType   string
+				}{
+					IsDev:         config.IsDev,
+					MaxTransBytes: config.MaxTransBytes,
+					StorageType:   config.StorageType,
+				}
+
+				jsonData, err := json.Marshal(pageData)
+				if err != nil {
+					return
+				}
+
+				// Заменяем в HTML
+				html = []byte(strings.ReplaceAll(
+					string(html),
+					`data-page="{}"`,
+					`data-page='`+string(jsonData)+`'`,
+				))
+
+				w.Write(html)
+				defer r.Body.Close()
+			}
+		})
+	}
 
 	ad := adapter.Setup()
 	ctx := ad.InitContext()
-	ctx.Events = core.NewEventBus()
+	ctx.Events = Events.NewEventBus()
 
 	//Инициализация событий
 	{
-		ctx.Events.AddSyncHandler("event:ServerStarted", core.EventHandler{
-			Func: func(event *core.Event) {
+		ctx.Events.AddSyncHandler("event:ServerStarted", Events.EventHandler{
+			Func: func(event *Events.Event) {
 				fmt.Println("Listening on http://localhost:" + strconv.Itoa(Config.Port))
 			},
 			Priority: 1,
 		})
 
-		ctx.Events.AddSyncHandler("event:onRequestStart", core.EventHandler{
-			Func: func(event *core.Event) {
-				fmt.Println("Request Get in:" + time.Now().String())
+		ctx.Events.AddSyncHandler("event:onRequestStart", Events.EventHandler{
+			Func: func(event *Events.Event) {
+				//fmt.Println("Request Get in:" + time.Now().String())
 			},
 			Priority: 1,
 		})
 
-		ctx.Events.AddSyncHandler("event:onRequestEnd", core.EventHandler{
-			Func: func(event *core.Event) {
-				fmt.Println("Request Get out:" + time.Now().String())
+		ctx.Events.AddSyncHandler("event:onRequestEnd", Events.EventHandler{
+			Func: func(event *Events.Event) {
+				//fmt.Println("Request Get out:" + time.Now().String())
 			},
 			Priority: 1,
 		})
@@ -103,11 +140,11 @@ func main() {
 	}
 
 	//Открываем браузер на странице с конфигом
-	if err := utils.Openbrowser("http://localhost:" + strconv.Itoa(Config.Port) + "/config"); err != nil {
-		log.Printf("Не удалось открыть браузер: %v", err)
+	if Config.AutoOpenBrowser {
+		if err := utils.Openbrowser("http://localhost:" + strconv.Itoa(Config.Port) + "/debug"); err != nil {
+			log.Printf("Не удалось открыть браузер: %v", err)
+		}
 	}
-
-	//Событие старта сервера
 
 	server := &http.Server{
 		Addr:           ":" + strconv.Itoa(Config.Port),
@@ -115,49 +152,9 @@ func main() {
 		MaxHeaderBytes: 1 << 20, //128кб
 	}
 
+	//Событие старта сервера
 	ctx.Events.EmitSync(nil, "event:ServerStarted")
 	if err := server.ListenAndServe(); err != nil {
 		fmt.Println(err)
 	}
-}
-
-func httpRouterConfig(path *string, mux *router.MyRouter) {
-	mux.AddRouter("/config", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			config.RefreshAdapterConfig()
-		case "GET":
-
-			filePath := filepath.Join(*path, "ui", "pages", "config.html")
-			html, _ := os.ReadFile(filePath)
-
-			config := config.GetMainConfig()
-
-			pageData := struct {
-				IsDev         bool
-				MaxTransBytes int64
-				StorageType   string
-			}{
-				IsDev:         config.IsDev,
-				MaxTransBytes: config.MaxTransBytes,
-				StorageType:   config.StorageType,
-			}
-
-			jsonData, err := json.Marshal(pageData)
-			if err != nil {
-				return
-			}
-
-			// Заменяем в HTML
-			html = []byte(strings.Replace(
-				string(html),
-				`data-page="{}"`,
-				`data-page='`+string(jsonData)+`'`,
-				-1, // -1 означает замену всех вхождений
-			))
-
-			w.Write(html)
-			defer r.Body.Close()
-		}
-	})
 }

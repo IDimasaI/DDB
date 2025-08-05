@@ -43,12 +43,12 @@ func Setup() *Adapter {
 }
 
 // InitContext инициализирует контекст
-func (a *Adapter) InitContext() *storage.BdContext {
-	return &storage.BdContext{}
+func (a *Adapter) InitContext() *storage.AppContext {
+	return &storage.AppContext{}
 }
 
 // Handle обрабатывает HTTP запрос в зависимости от действия
-func (a *Adapter) Handle(w http.ResponseWriter, r *http.Request, action Action, ctx *storage.BdContext) {
+func (a *Adapter) Handle(w http.ResponseWriter, r *http.Request, action Action, ctx *storage.AppContext) {
 	switch action {
 	case GET:
 		a.Storage.GET(w, r, ctx)
